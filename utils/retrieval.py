@@ -20,9 +20,24 @@ def classify_intent(question: str) -> str:
     return "general"
 
 
+def _extract_well_from_question(question: str, kg: KnowledgeGraph) -> Optional[str]:
+    """Try to find a well ID mentioned in the question."""
+    q_upper = question.upper()
+    # Try longest match first to avoid partial hits
+    for wid in sorted(kg.wells.keys(), key=len, reverse=True):
+        if wid.upper() in q_upper:
+            return wid
+    return None
+
+
 def retrieve(question: str, well_id: Optional[str], kg: KnowledgeGraph) -> Dict[str, Any]:
     """Run deterministic retrieval and return evidence dict."""
     intent = classify_intent(question)
+
+    # If no well selected, try to detect one from the question text
+    if not well_id:
+        well_id = _extract_well_from_question(question, kg)
+
     evidence: Dict[str, Any] = {
         "intent": intent,
         "question": question,
@@ -61,6 +76,19 @@ def retrieve(question: str, well_id: Optional[str], kg: KnowledgeGraph) -> Dict[
         if well_id:
             evidence.update(_retrieve_lithology(well_id, kg, question))
             evidence.update(_retrieve_flow(well_id, kg))
+        else:
+            # No well context — provide global overview
+            evidence["AllWells"] = [
+                {"well_id": w.well_id, "total_depth": w.total_depth,
+                 "ground_elev": w.ground_elev, "lat": w.lat, "lon": w.lon}
+                for w in kg.wells.values()
+            ]
+            evidence["HeadSummary"] = {
+                "total_cells": len(kg.head_cells),
+                "min_head": round(min((c.head for c in kg.head_cells.values()), default=0), 3),
+                "max_head": round(max((c.head for c in kg.head_cells.values()), default=0), 3),
+            }
+            evidence.update(_retrieve_hotspot(None, kg))
 
     evidence["DataReferences"] = _data_refs(intent)
     return evidence

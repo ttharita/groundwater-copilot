@@ -289,6 +289,8 @@ with copilot_col:
         "NB4 ชั้นดินเป็นอย่างไรตั้งแต่ 0–200m?",
         "น้ำจากบ่อ NB4 มีแนวโน้มไหลไปทางไหน?",
         "บ่อไหนอยู่ในบริเวณ head ต่ำสุด 10 อันดับ?",
+        "มีบ่อน้ำทั้งหมดกี่บ่อ และบ่อไหนลึกที่สุด?",
+        "ภาพรวม head น้ำบาดาลในพื้นที่เป็นอย่างไร?",
     ]
     for eq in example_qs:
         if st.button(eq, key=f"chip_{eq[:20]}", use_container_width=True):
@@ -298,7 +300,7 @@ with copilot_col:
     st.divider()
 
     # ── Chat input ──
-    user_q = st.chat_input("Ask about groundwater …")
+    user_q = st.chat_input("Ask about any well or groundwater in general …")
     if user_q:
         st.session_state["pending_question"] = user_q
 
