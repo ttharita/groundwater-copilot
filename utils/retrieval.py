@@ -17,6 +17,10 @@ def classify_intent(question: str) -> str:
     if any(k in q for k in ["head ต่ำ", "ต่ำสุด", "hotspot", "lowest", "สูงสุด",
                              "highest", "อันดับ", "top", "rank"]):
         return "hotspot"
+    if any(k in q for k in ["ทั้งหมด", "กี่บ่อ", "จำนวน", "ลึกที่สุด", "ลึกสุด",
+                             "สรุป", "overview", "summary", "total", "how many",
+                             "all wells", "deepest", "ภาพรวม", "รวม"]):
+        return "overview"
     return "general"
 
 
@@ -71,24 +75,15 @@ def retrieve(question: str, well_id: Optional[str], kg: KnowledgeGraph) -> Dict[
         evidence.update(_retrieve_flow(well_id, kg))
     elif intent == "hotspot":
         evidence.update(_retrieve_hotspot(well_id, kg))
+    elif intent == "overview":
+        evidence.update(_retrieve_overview(well_id, kg))
     else:
         # general: include a bit of everything
         if well_id:
             evidence.update(_retrieve_lithology(well_id, kg, question))
             evidence.update(_retrieve_flow(well_id, kg))
         else:
-            # No well context — provide global overview
-            evidence["AllWells"] = [
-                {"well_id": w.well_id, "total_depth": w.total_depth,
-                 "ground_elev": w.ground_elev, "lat": w.lat, "lon": w.lon}
-                for w in kg.wells.values()
-            ]
-            evidence["HeadSummary"] = {
-                "total_cells": len(kg.head_cells),
-                "min_head": round(min((c.head for c in kg.head_cells.values()), default=0), 3),
-                "max_head": round(max((c.head for c in kg.head_cells.values()), default=0), 3),
-            }
-            evidence.update(_retrieve_hotspot(None, kg))
+            evidence.update(_retrieve_overview(None, kg))
 
     evidence["DataReferences"] = _data_refs(intent)
     return evidence
@@ -178,10 +173,42 @@ def _retrieve_hotspot(well_id: Optional[str], kg: KnowledgeGraph) -> Dict:
     return result
 
 
+def _retrieve_overview(well_id: Optional[str], kg: KnowledgeGraph) -> Dict:
+    all_wells = list(kg.wells.values())
+    deepest = sorted(all_wells, key=lambda w: w.total_depth, reverse=True)[:5]
+    result: Dict[str, Any] = {
+        "Overview": {
+            "total_wells": len(all_wells),
+            "deepest_wells": [
+                {"well_id": w.well_id, "total_depth": w.total_depth, "ground_elev": w.ground_elev}
+                for w in deepest
+            ],
+            "head_summary": {
+                "total_cells": len(kg.head_cells),
+                "min_head": round(min((c.head for c in kg.head_cells.values()), default=0), 3),
+                "max_head": round(max((c.head for c in kg.head_cells.values()), default=0), 3),
+            },
+            "all_wells": [
+                {"well_id": w.well_id, "total_depth": w.total_depth, "ground_elev": w.ground_elev}
+                for w in all_wells
+            ],
+        }
+    }
+    if well_id:
+        w = kg.get_well(well_id)
+        if w:
+            result["SelectedWell"] = {
+                "well_id": w.well_id, "total_depth": w.total_depth, "ground_elev": w.ground_elev
+            }
+    return result
+
+
 def _data_refs(intent: str) -> Dict:
     base = ["wells_wgs84.geojson", "head_grid_wgs84.geojson"]
     if intent == "lithology":
         base.append("intervals.csv")
     if intent == "flow":
         base.append("flow_dir_arrows_wgs84.geojson")
+    if intent == "overview":
+        base.append("intervals.csv")
     return {"files": base, "method": "GraphRAG in-memory traversal"}

@@ -17,6 +17,8 @@ def fallback_answer(question: str, evidence: Dict[str, Any]) -> str:
         lines.extend(_flow_answer(evidence))
     elif intent == "hotspot":
         lines.extend(_hotspot_answer(evidence))
+    elif intent == "overview":
+        lines.extend(_overview_answer(evidence))
     else:
         lines.extend(_general_answer(evidence))
 
@@ -77,6 +79,20 @@ def _hotspot_answer(ev: Dict[str, Any]) -> list:
         for c in hn:
             wells = ", ".join(c.get("wells_inside", [])) or "ไม่มีบ่อ"
             lines.append(f"  - ({c['row']},{c['col']}) head={c['head']}  → {wells}")
+    return lines
+
+
+def _overview_answer(ev: Dict[str, Any]) -> list:
+    ov = ev.get("Overview", {})
+    lines = [f"- บ่อน้ำทั้งหมด: **{ov.get('total_wells', '?')} บ่อ**"]
+    deepest = ov.get("deepest_wells", [])
+    if deepest:
+        lines.append("- **บ่อที่ลึกที่สุด:**")
+        for w in deepest:
+            lines.append(f"  - {w['well_id']}: {w['total_depth']} m")
+    hs = ov.get("head_summary", {})
+    if hs:
+        lines.append(f"- Head น้ำบาดาล: min={hs.get('min_head')}  max={hs.get('max_head')}  (จาก {hs.get('total_cells')} cells)")
     return lines
 
 
